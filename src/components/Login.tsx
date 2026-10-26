@@ -70,11 +70,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleDemoLogin = () => {
-    onLoginSuccess('Rock AI Demo', 'demo@rockai.local');
-  };
-
-  const demoLoginEnabled = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
 
   return (
     <div className="relative min-h-screen w-full bg-transparent flex items-center justify-center p-4 overflow-hidden selection:bg-pink-500/30 selection:text-pink-200">
@@ -233,18 +228,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <div className="flex-1 h-[1px] bg-white/5" />
           </div>
 
-          {/* Demo bypass is opt-in for local development only. */}
-          {demoLoginEnabled && (
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={loading}
-              className="w-full bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-cyan-500/40 py-3.5 rounded-2xl text-zinc-200 text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 group/demo cursor-pointer"
-            >
-              <Shield className="w-4 h-4 text-cyan-400 group-hover/demo:animate-pulse" />
-              <span>ENTER DEV WORKSPACE</span>
-            </button>
-          )}
+
         </div>
 
         {/* Bottom Credits Footer */}
