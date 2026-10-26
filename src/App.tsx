@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './services/googleDriveService';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 import { Login } from './components/Login';
 import { RockAIContainer } from './components/RockAIContainer';
@@ -15,7 +17,31 @@ import { ArrowLeft } from 'lucide-react';
 function MainApp() {
   const { activeProject } = useProject();
   const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [viewMode, setViewMode] = useState<'os' | 'workspace'>('os');
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Rock AI User',
+          email: firebaseUser.email || '',
+        });
+      } else {
+        setUser(null);
+      }
+      setAuthReady(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  if (!authReady) {
+    return (
+      <div className="h-screen w-full bg-black text-cyan-300 flex items-center justify-center">
+        <span className="text-sm font-mono">Checking secure session…</span>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Login onLoginSuccess={(username, email) => setUser({ username, email })} />;
