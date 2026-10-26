@@ -6,6 +6,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Terminal, Shield, Sparkles, LogIn, UserPlus, ArrowRight, Star, Cpu, Flame, Compass } from 'lucide-react';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../services/googleDriveService';
 
 interface LoginProps {
   onLoginSuccess: (username: string, email: string) => void;
@@ -13,35 +15,66 @@ interface LoginProps {
 
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('jinuraj');
-  const [email, setEmail] = useState('jinuraj26107@gmail.com');
-  const [password, setPassword] = useState('********');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    if (!email || !password || (!isLogin && !username)) {
-      setError('Please complete all form credentials.');
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password || (!isLogin && !username.trim())) {
+      setError('Please complete all required fields.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must contain at least 6 characters.');
       return;
     }
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      if (isLogin) {
+        const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+        onLoginSuccess(
+          credential.user.displayName || username.trim() || normalizedEmail.split('@')[0],
+          credential.user.email || normalizedEmail
+        );
+      } else {
+        const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+        if (username.trim()) {
+          await updateProfile(credential.user, { displayName: username.trim() });
+        }
+        onLoginSuccess(username.trim(), credential.user.email || normalizedEmail);
+      }
+    } catch (err: any) {
+      const code = typeof err?.code === 'string' ? err.code : '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        setError('Email or password is incorrect.');
+      } else if (code === 'auth/email-already-in-use') {
+        setError('An account already exists for this email. Please sign in.');
+      } else if (code === 'auth/weak-password') {
+        setError('Choose a stronger password with at least 6 characters.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Email/password sign-in is not enabled in Firebase Authentication.');
+      } else {
+        setError(err?.message || 'Authentication failed. Please try again.');
+      }
+    } finally {
       setLoading(false);
-      onLoginSuccess(isLogin ? username || 'jinuraj' : username, email);
-    }, 1200);
+    }
   };
 
   const handleDemoLogin = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      onLoginSuccess('jinuraj', 'jinuraj26107@gmail.com');
-    }, 800);
+    onLoginSuccess('Rock AI Demo', 'demo@rockai.local');
   };
+
+  const demoLoginEnabled = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
 
   return (
     <div className="relative min-h-screen w-full bg-transparent flex items-center justify-center p-4 overflow-hidden selection:bg-pink-500/30 selection:text-pink-200">
@@ -200,15 +233,18 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <div className="flex-1 h-[1px] bg-white/5" />
           </div>
 
-          {/* Quick Demo Bypass */}
-          <button
-            onClick={handleDemoLogin}
-            disabled={loading}
-            className="w-full bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-cyan-500/40 py-3.5 rounded-2xl text-zinc-200 text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 group/demo cursor-pointer"
-          >
-            <Shield className="w-4 h-4 text-cyan-400 group-hover/demo:animate-pulse" />
-            <span>ENTER DEV WORKSPACE</span>
-          </button>
+          {/* Demo bypass is opt-in for local development only. */}
+          {demoLoginEnabled && (
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              disabled={loading}
+              className="w-full bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-cyan-500/40 py-3.5 rounded-2xl text-zinc-200 text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 group/demo cursor-pointer"
+            >
+              <Shield className="w-4 h-4 text-cyan-400 group-hover/demo:animate-pulse" />
+              <span>ENTER DEV WORKSPACE</span>
+            </button>
+          )}
         </div>
 
         {/* Bottom Credits Footer */}
