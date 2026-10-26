@@ -14,10 +14,7 @@ import { ArrowLeft } from 'lucide-react';
 
 function MainApp() {
   const { activeProject } = useProject();
-  const [user, setUser] = useState<{ username: string; email: string } | null>({
-    username: 'jinuraj',
-    email: 'jinuraj26107@gmail.com'
-  });
+  const [user, setUser] = useState<{ username: string; email: string } | null>(null);
   const [viewMode, setViewMode] = useState<'os' | 'workspace'>('os');
 
   if (!user) {
