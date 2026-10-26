@@ -29,15 +29,15 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Validate project path
+      - name: Check Android project
         env:
           PROJECT_DIR: ${{ inputs.project_dir || 'android-project' }}
         run: |
           set -euo pipefail
           case "$PROJECT_DIR" in
-            ""|/*|*".."*|*"${{ }}"*) echo "Invalid project directory"; exit 1 ;;
+            ""|/*|*..*) echo "::error::Invalid project directory"; exit 1 ;;
           esac
-          if [ ! -f "$PROJECT_DIR/gradlew" ] || [ ! -f "$PROJECT_DIR/settings.gradle" -a ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
+          if [ ! -f "$PROJECT_DIR/gradlew" ] || { [ ! -f "$PROJECT_DIR/settings.gradle" ] && [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; }; then
             echo "::error::No Android Gradle project found at '$PROJECT_DIR'. Expected gradlew and settings.gradle(.kts). Export a complete native Android project there first."
             exit 1
           fi
