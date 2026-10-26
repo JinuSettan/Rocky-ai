@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Premium Cosmic Theme Colors */
+  --color-space-black: #050505;
+  --color-electric-blue: #00f0ff;
+  --color-crimson-red: #ff0055;
+  --color-neon-pink: #ff00bf;
+  --color-cosmic-purple: #9d00ff;
+
+  /* Custom hacker terminal animations & futuristic cinematic flows */
+  @keyframes terminal-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  @keyframes crt-flicker {
+    0% { opacity: 0.97; }
+    15% { opacity: 0.98; }
+    30% { opacity: 0.95; }
+    45% { opacity: 0.99; }
+    60% { opacity: 0.96; }
+    75% { opacity: 1; }
+    90% { opacity: 0.95; }
+    100% { opacity: 0.98; }
+  }
+  @keyframes scanline-anim {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 0.4;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.2), 0 0 30px rgba(157, 0, 255, 0.1);
+    }
+    50% {
+      opacity: 0.95;
+      box-shadow: 0 0 25px rgba(255, 0, 191, 0.4), 0 0 50px rgba(0, 240, 255, 0.3);
+    }
+  }
+  @keyframes spin-slow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  @keyframes aurora-flow {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  @keyframes text-glow {
+    0%, 100% {
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.4), 0 0 15px rgba(255, 0, 191, 0.2);
+    }
+    50% {
+      text-shadow: 0 0 15px rgba(255, 0, 191, 0.6), 0 0 25px rgba(157, 0, 255, 0.4);
+    }
+  }
+  @keyframes neon-border-pulse {
+    0%, 100% {
+      border-color: rgba(0, 240, 255, 0.2);
+    }
+    50% {
+      border-color: rgba(255, 0, 191, 0.6);
+    }
+  }
+
+  --animate-terminal-blink: terminal-blink 1s step-end infinite;
+  --animate-crt-flicker: crt-flicker 0.25s infinite;
+  --animate-scanline: scanline-anim 6s linear infinite;
+  --animate-pulse-glow: pulse-glow 3s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 20s linear infinite;
+  --animate-aurora-flow: aurora-flow 15s ease infinite;
+  --animate-text-glow: text-glow 2s ease-in-out infinite;
+  --animate-neon-border: neon-border-pulse 4s ease-in-out infinite;
+}
+
+/* Custom terminal CRT styles */
+.crt-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.crt-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  background: linear-gradient(
+    to bottom,
+    rgba(251, 146, 60, 0) 0%,
+    rgba(251, 146, 60, 0.04) 10%,
+    rgba(251, 146, 60, 0.1) 50%,
+    rgba(251, 146, 60, 0.04) 90%,
+    rgba(251, 146, 60, 0) 100%
+  );
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Cosmic glows */
+.cosmic-gradient-border {
+  border: 1px solid transparent;
+  background-image: linear-gradient(#050505, #050505), linear-gradient(to right, #00f0ff, #ff0055, #ff00bf, #9d00ff);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.cosmic-gradient-bg {
+  background: linear-gradient(-45deg, #050505, #0a0a1a, #150020, #080010);
+  background-size: 400% 400%;
+  animation: aurora-flow 15s ease infinite;
+}
+
+/* Custom glow effects */
+.terminal-glow {
+  text-shadow: 0 0 4px rgba(251, 146, 60, 0.3);
+}
+
+.terminal-glow-green {
+  text-shadow: 0 0 4px rgba(74, 222, 128, 0.4);
+}
+
+.terminal-glow-blue {
+  text-shadow: 0 0 4px rgba(96, 165, 250, 0.4);
+}
+
+.terminal-glow-purple {
+  text-shadow: 0 0 4px rgba(192, 132, 252, 0.4);
+}
+
+.terminal-glow-red {
+  text-shadow: 0 0 4px rgba(248, 113, 113, 0.4);
+}
+
+/* Premium custom scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(5, 5, 5, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(157, 0, 255, 0.2);
+  border-radius: 99px;
+  border: 1px solid rgba(0, 240, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 0, 191, 0.4);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+/* Interactive Ripple for glass buttons */
+.btn-glass-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-glass-ripple::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease, height 0.4s ease;
+  pointer-events: none;
+}
+
+.btn-glass-ripple:active::after {
+  width: 250px;
+  height: 250px;
+}
+

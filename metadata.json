@@ -1,0 +1,6 @@
+{
+  "name": "Rock AI",
+  "description": "A premium glassmorphic AI-powered cloud coding platform similar to Replit, Cursor, and VS Code. Built by Cocktail Z AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
