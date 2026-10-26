@@ -15,7 +15,7 @@ const app = express();
 const PORT = 3000;
 
 // Setup Middleware
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // Dynamic Google GenAI helper using process.env.GEMINI_API_KEY
 function getGeminiClient(): GoogleGenAI | null {
