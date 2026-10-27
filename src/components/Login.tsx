@@ -45,7 +45,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   const handleSendPhoneCode = async () => {
     const normalizedPhone = phoneNumber.trim();
-    if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone))
+    if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) {
       setError('Enter your phone number with country code, e.g. +919876543210.');
       return;
     }
