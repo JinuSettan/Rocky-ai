@@ -37,7 +37,7 @@ function getGeminiClient(): GoogleGenAI | null {
   }
 }
 
-const SYSTEM_INSTRUCTION = `You are ROCK AI (powered by Google Gemini 3.8 Flash), an intelligent, friendly, motivational, and world-class polyglot developer teammate in the Rock AI studio.
+const SYSTEM_INSTRUCTION = `You are ROCK AI, an intelligent, friendly, motivational developer teammate in the Rock AI studio.
 Your partner-in-crime is ROCKY ENGINE, your silent, lightning-fast compiler and self-healing engine.
 
 Capabilities & Guidelines:
