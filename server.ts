@@ -296,6 +296,7 @@ app.post('/api/ai/chat/stream', async (req, res) => {
           }
         });
       } catch (primaryErr: any) {
+        console.error('[AI stream] Primary Gemini model failed:', primaryErr?.status || '', primaryErr?.message || primaryErr);
         if (!isAuthOrQuotaError(primaryErr)) {
           try {
             responseStream = await aiClient.models.generateContentStream({
@@ -307,7 +308,7 @@ app.post('/api/ai/chat/stream', async (req, res) => {
               }
             });
           } catch (secondaryErr: any) {
-            // Silence secondary error dump
+            console.error('[AI stream] Fallback Gemini model failed:', secondaryErr?.status || '', secondaryErr?.message || secondaryErr);
           }
         }
       }
@@ -323,7 +324,7 @@ app.post('/api/ai/chat/stream', async (req, res) => {
         return;
       }
     } catch (err: any) {
-      // Seamlessly handle stream errors
+      console.error('[AI stream] Request failed:', err?.status || '', err?.message || err);
     }
   }
 
@@ -356,6 +357,7 @@ app.post('/api/ai/chat', async (req, res) => {
           }
         });
       } catch (firstError: any) {
+        console.error('[AI chat] Primary Gemini model failed:', firstError?.status || '', firstError?.message || firstError);
         if (!isAuthOrQuotaError(firstError)) {
           try {
             response = await aiClient.models.generateContent({
@@ -367,7 +369,7 @@ app.post('/api/ai/chat', async (req, res) => {
               }
             });
           } catch (secondError: any) {
-            // Silence fallback error dump
+            console.error('[AI chat] Fallback Gemini model failed:', secondError?.status || '', secondError?.message || secondError);
           }
         }
       }
@@ -376,7 +378,7 @@ app.post('/api/ai/chat', async (req, res) => {
         return res.json({ text: response.text });
       }
     } catch (error: any) {
-      // Seamlessly fall through
+      console.error('[AI chat] Request failed:', error?.status || '', error?.message || error);
     }
   }
 
