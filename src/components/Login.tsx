@@ -13,6 +13,8 @@ interface LoginProps {
   onLoginSuccess: (username: string, email: string) => void;
 }
 
+let phoneRecaptchaVerifier: RecaptchaVerifier | null = null;
+
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
@@ -52,11 +54,13 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     try {
       const recaptchaContainer = document.getElementById('rock-ai-phone-recaptcha');
       if (!recaptchaContainer) throw new Error('Phone verification is not ready. Reload and try again.');
-      const verifier = new RecaptchaVerifier(auth, recaptchaContainer, { size: 'normal' });
-      const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+      phoneRecaptchaVerifier ??= new RecaptchaVerifier(auth, recaptchaContainer, { size: 'normal' });
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, phoneRecaptchaVerifier);
       setPhoneConfirmation(confirmation);
       setError('SMS verification code sent. Enter the code below.');
     } catch (err: any) {
+      phoneRecaptchaVerifier?.clear();
+      phoneRecaptchaVerifier = null;
       setError(err?.message || 'Could not send SMS code. Check the number and try again.');
     } finally {
       setPhoneLoading(false);
