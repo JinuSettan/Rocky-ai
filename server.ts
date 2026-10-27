@@ -53,52 +53,6 @@ Capabilities & Guidelines:
 - Ensure every generated file is ready to compile and run in the live preview or full IDE workspace.`;
 
 
-/**
- * Server-only OpenAI Responses API call. Never expose OPENAI_API_KEY to browser code.
- * This wires real model responses into chat; controlled project-file/build tools are
- * a separate milestone and are not claimed to exist yet.
- */
-async function generateOpenAIText(
-  prompt: string,
-  history?: Array<{ role: string; text?: string }>,
-  activeFileName?: string,
-  activeFileContent?: string,
-): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
-
-  const input: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-  for (const turn of Array.isArray(history) ? history.slice(-8) : []) {
-    if ((turn.role === 'user' || turn.role === 'assistant') && typeof turn.text === 'string') {
-      input.push({ role: turn.role, content: turn.text.slice(0, 12000) });
-    }
-  }
-  let currentPrompt = String(prompt || '');
-  if (activeFileName && activeFileContent) {
-    currentPrompt = `Active file: ${activeFileName}\n\n\`\`\`\n${String(activeFileContent).slice(0, 20000)}\n\`\`\`\n\nUser request:\n${currentPrompt}`;
-  }
-  input.push({ role: 'user', content: currentPrompt.slice(0, 24000) });
-
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL?.trim() || 'gpt-5.5',
-      instructions: SYSTEM_INSTRUCTION,
-      input,
-      max_output_tokens: 5000,
-      store: false,
-    }),
-    signal: AbortSignal.timeout(90000),
-  });
-  const payload: any = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(String(payload?.error?.message || `OpenAI API returned HTTP ${response.status}`).slice(0, 500));
-  }
-  const outputText = typeof payload.output_text === 'string' ? payload.output_text.trim() : '';
-  if (!outputText) throw new Error('OpenAI returned no text output.');
-  return outputText;
-}
 
 const isAuthOrQuotaError = (e: any): boolean => {
   const str = `${e?.message || ''} ${e?.status || ''} ${JSON.stringify(e || {})}`.toLowerCase();
@@ -325,17 +279,6 @@ app.post('/api/ai/chat/stream', async (req, res) => {
     }
   };
 
-  // Prefer real OpenAI output when a server-side key is configured.
-  if (process.env.OPENAI_API_KEY?.trim()) {
-    try {
-      sendChunk(await generateOpenAIText(prompt, history, activeFileName, activeFileContent));
-    } catch (error: any) {
-      sendChunk(`⚠️ OpenAI request failed: ${error?.message || 'Unknown API error'}. Check server OPENAI_API_KEY and OPENAI_MODEL settings.`);
-    }
-    sendDone();
-    return;
-  }
-
   // 1. Try Gemini API if client and credentials are valid
   const aiClient = getGeminiClient();
   if (aiClient) {
@@ -385,7 +328,7 @@ app.post('/api/ai/chat/stream', async (req, res) => {
   }
 
   // Do not present a scripted mock as a real AI-generated response.
-  sendChunk('⚠️ No AI provider is configured or available. Add OPENAI_API_KEY or a valid GEMINI_API_KEY to the server environment.');
+  sendChunk('⚠️ No AI provider is configured or available. Add a valid GEMINI_API_KEY to the server environment.');
   sendDone();
 });
 
@@ -395,16 +338,6 @@ app.post('/api/ai/chat', async (req, res) => {
 
   if (!prompt && !activeFileContent) {
     return res.status(400).json({ error: 'Missing prompt or content.' });
-  }
-
-  // Prefer OpenAI Responses API when a server-side key is configured.
-  if (process.env.OPENAI_API_KEY?.trim()) {
-    try {
-      const text = await generateOpenAIText(prompt, history, activeFileName, activeFileContent);
-      return res.json({ text });
-    } catch (error: any) {
-      return res.status(502).json({ error: `OpenAI request failed: ${error?.message || 'Unknown API error'}` });
-    }
   }
 
   // 1. If Gemini API is configured and credentials are valid, call it
