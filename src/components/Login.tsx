@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Terminal, Shield, Sparkles, LogIn, UserPlus, ArrowRight, Star, Cpu, Flame, Compass } from 'lucide-react';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth } from '../services/googleDriveService';
 
 interface LoginProps {
@@ -20,6 +20,68 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [phoneConfirmation, setPhoneConfirmation] = useState<ConfirmationResult | null>(null);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, new GoogleAuthProvider());
+      onLoginSuccess(
+        result.user.displayName || result.user.email?.split('@')[0] || 'Rock AI User',
+        result.user.email || ''
+      );
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPhoneCode = async () => {
+    const normalizedPhone = phoneNumber.trim();
+    if (!/^\\+[1-9]\\d{7,14}$/.test(normalizedPhone)) {
+      setError('Enter your phone number with country code, e.g. +919876543210.');
+      return;
+    }
+    setError('');
+    setPhoneLoading(true);
+    try {
+      const recaptchaContainer = document.getElementById('rock-ai-phone-recaptcha');
+      if (!recaptchaContainer) throw new Error('Phone verification is not ready. Reload and try again.');
+      const verifier = new RecaptchaVerifier(auth, recaptchaContainer, { size: 'normal' });
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+      setPhoneConfirmation(confirmation);
+      setError('SMS verification code sent. Enter the code below.');
+    } catch (err: any) {
+      setError(err?.message || 'Could not send SMS code. Check the number and try again.');
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneCode = async () => {
+    if (!phoneConfirmation || !smsCode.trim()) {
+      setError('Enter the SMS verification code first.');
+      return;
+    }
+    setError('');
+    setPhoneLoading(true);
+    try {
+      const result = await phoneConfirmation.confirm(smsCode.trim());
+      onLoginSuccess(
+        result.user.displayName || result.user.phoneNumber || 'Rock AI User',
+        result.user.email || result.user.phoneNumber || ''
+      );
+    } catch (err: any) {
+      setError(err?.message || 'Phone verification failed. Check the code and try again.');
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,6 +290,61 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <div className="flex-1 h-[1px] bg-white/5" />
           </div>
 
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading || phoneLoading}
+              className="w-full rounded-2xl border border-white/15 bg-zinc-900/80 px-4 py-3 text-sm font-semibold text-white hover:border-cyan-400/60 transition disabled:opacity-50"
+            >
+              Continue with Google
+            </button>
+
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-300">Continue with phone</p>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                autoComplete="tel"
+                className="w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                placeholder="+919876543210"
+                aria-label="Phone number with country code"
+              />
+              <div id="rock-ai-phone-recaptcha" />
+              {!phoneConfirmation ? (
+                <button
+                  type="button"
+                  onClick={handleSendPhoneCode}
+                  disabled={phoneLoading || loading}
+                  className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white hover:bg-cyan-600 disabled:opacity-50"
+                >
+                  {phoneLoading ? 'Sending code…' : 'Send SMS code'}
+                </button>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={smsCode}
+                    onChange={(e) => setSmsCode(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                    placeholder="SMS verification code"
+                    aria-label="SMS verification code"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyPhoneCode}
+                    disabled={phoneLoading || loading}
+                    className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white hover:bg-cyan-600 disabled:opacity-50"
+                  >
+                    {phoneLoading ? 'Verifying…' : 'Verify phone'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
 
         </div>
 
