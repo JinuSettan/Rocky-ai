@@ -6,42 +6,136 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Terminal, Shield, Sparkles, LogIn, UserPlus, ArrowRight, Star, Cpu, Flame, Compass } from 'lucide-react';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { auth } from '../services/googleDriveService';
 
 interface LoginProps {
   onLoginSuccess: (username: string, email: string) => void;
 }
 
+let phoneRecaptchaVerifier: RecaptchaVerifier | null = null;
+
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('jinuraj');
-  const [email, setEmail] = useState('jinuraj26107@gmail.com');
-  const [password, setPassword] = useState('********');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [phoneConfirmation, setPhoneConfirmation] = useState<ConfirmationResult | null>(null);
+  const [phoneLoading, setPhoneLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, new GoogleAuthProvider());
+      onLoginSuccess(
+        result.user.displayName || result.user.email?.split('@')[0] || 'Rock AI User',
+        result.user.email || ''
+      );
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPhoneCode = async () => {
+    const normalizedPhone = phoneNumber.trim();
+    if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) {
+      setError('Enter your phone number with country code, e.g. +919876543210.');
+      return;
+    }
+    setError('');
+    setPhoneLoading(true);
+    try {
+      const recaptchaContainer = document.getElementById('rock-ai-phone-recaptcha');
+      if (!recaptchaContainer) throw new Error('Phone verification is not ready. Reload and try again.');
+      phoneRecaptchaVerifier ??= new RecaptchaVerifier(auth, recaptchaContainer, { size: 'normal' });
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, phoneRecaptchaVerifier);
+      setPhoneConfirmation(confirmation);
+      setError('SMS verification code sent. Enter the code below.');
+    } catch (err: any) {
+      phoneRecaptchaVerifier?.clear();
+      phoneRecaptchaVerifier = null;
+      setError(err?.message || 'Could not send SMS code. Check the number and try again.');
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneCode = async () => {
+    if (!phoneConfirmation || !smsCode.trim()) {
+      setError('Enter the SMS verification code first.');
+      return;
+    }
+    setError('');
+    setPhoneLoading(true);
+    try {
+      const result = await phoneConfirmation.confirm(smsCode.trim());
+      onLoginSuccess(
+        result.user.displayName || result.user.phoneNumber || 'Rock AI User',
+        result.user.email || result.user.phoneNumber || ''
+      );
+    } catch (err: any) {
+      setError(err?.message || 'Phone verification failed. Check the code and try again.');
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    if (!email || !password || (!isLogin && !username)) {
-      setError('Please complete all form credentials.');
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password || (!isLogin && !username.trim())) {
+      setError('Please complete all required fields.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must contain at least 6 characters.');
       return;
     }
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      if (isLogin) {
+        const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+        onLoginSuccess(
+          credential.user.displayName || username.trim() || normalizedEmail.split('@')[0],
+          credential.user.email || normalizedEmail
+        );
+      } else {
+        const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+        if (username.trim()) {
+          await updateProfile(credential.user, { displayName: username.trim() });
+        }
+        onLoginSuccess(username.trim(), credential.user.email || normalizedEmail);
+      }
+    } catch (err: any) {
+      const code = typeof err?.code === 'string' ? err.code : '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        setError('Email or password is incorrect.');
+      } else if (code === 'auth/email-already-in-use') {
+        setError('An account already exists for this email. Please sign in.');
+      } else if (code === 'auth/weak-password') {
+        setError('Choose a stronger password with at least 6 characters.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Email/password sign-in is not enabled in Firebase Authentication.');
+      } else {
+        setError(err?.message || 'Authentication failed. Please try again.');
+      }
+    } finally {
       setLoading(false);
-      onLoginSuccess(isLogin ? username || 'jinuraj' : username, email);
-    }, 1200);
+    }
   };
 
-  const handleDemoLogin = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      onLoginSuccess('jinuraj', 'jinuraj26107@gmail.com');
-    }, 800);
-  };
 
   return (
     <div className="relative min-h-screen w-full bg-transparent flex items-center justify-center p-4 overflow-hidden selection:bg-pink-500/30 selection:text-pink-200">
@@ -200,15 +294,62 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <div className="flex-1 h-[1px] bg-white/5" />
           </div>
 
-          {/* Quick Demo Bypass */}
-          <button
-            onClick={handleDemoLogin}
-            disabled={loading}
-            className="w-full bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-cyan-500/40 py-3.5 rounded-2xl text-zinc-200 text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 group/demo cursor-pointer"
-          >
-            <Shield className="w-4 h-4 text-cyan-400 group-hover/demo:animate-pulse" />
-            <span>ENTER DEV WORKSPACE</span>
-          </button>
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading || phoneLoading}
+              className="w-full rounded-2xl border border-white/15 bg-zinc-900/80 px-4 py-3 text-sm font-semibold text-white hover:border-cyan-400/60 transition disabled:opacity-50"
+            >
+              Continue with Google
+            </button>
+
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-300">Continue with phone</p>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                autoComplete="tel"
+                className="w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                placeholder="+919876543210"
+                aria-label="Phone number with country code"
+              />
+              <div id="rock-ai-phone-recaptcha" />
+              {!phoneConfirmation ? (
+                <button
+                  type="button"
+                  onClick={handleSendPhoneCode}
+                  disabled={phoneLoading || loading}
+                  className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white hover:bg-cyan-600 disabled:opacity-50"
+                >
+                  {phoneLoading ? 'Sending code…' : 'Send SMS code'}
+                </button>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={smsCode}
+                    onChange={(e) => setSmsCode(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                    placeholder="SMS verification code"
+                    aria-label="SMS verification code"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyPhoneCode}
+                    disabled={phoneLoading || loading}
+                    className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white hover:bg-cyan-600 disabled:opacity-50"
+                  >
+                    {phoneLoading ? 'Verifying…' : 'Verify phone'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
         </div>
 
         {/* Bottom Credits Footer */}

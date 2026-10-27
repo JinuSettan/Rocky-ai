@@ -7,6 +7,7 @@ import { useProject } from '../context/ProjectContext';
 import { FileNode } from '../types';
 import JSZip from 'jszip';
 import { extractFilesFromAIResponse } from '../utils/codeParser';
+import { generateResponse } from '../services/gemini';
 
 export interface ChatMsg {
   id: string;
@@ -67,6 +68,7 @@ export const AIChatPage: React.FC<AIChatPageProps> = (props) => {
   const [isBlackHoleExpanded, setIsBlackHoleExpanded] = useState(false);
   // Upload status indicator
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploadedFileContent, setUploadedFileContent] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active preview / edit modals
@@ -123,24 +125,67 @@ export const AIChatPage: React.FC<AIChatPageProps> = (props) => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    e.target.value = '';
+    if (!file) return;
+
+    if (file.size > 1024 * 1024) {
+      setInternalError('Please upload a text/code file smaller than 1 MB.');
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      if (!text.trim()) {
+        setInternalError('The selected file is empty or cannot be read as text.');
+        return;
+      }
       setUploadedFileName(file.name);
-      setInput(`Please inspect and optimize this file: ${file.name}`);
+      setUploadedFileContent(text);
+      setInput(`Please inspect this attached file (${file.name}), explain any issues, and suggest or provide a corrected version.`);
+      setInternalError(null);
+    } catch {
+      setInternalError('Could not read this file. Please choose a text or source-code file.');
     }
   };
 
   const toggleVoiceMode = () => {
-    if (!isVoiceActive) {
-      setIsVoiceActive(true);
-      // Simulate voice capture
-      setTimeout(() => {
-        setInput('Build a Python game with AI enemy mechanics');
-        setIsVoiceActive(false);
-      }, 2500);
-    } else {
+    if (isVoiceActive) {
       setIsVoiceActive(false);
+      return;
+    }
+
+    const speechWindow = window as any;
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setInternalError('Voice input is not supported in this browser. You can type your prompt instead.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ml-IN';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event: any) => {
+      const transcript = event.results?.[0]?.[0]?.transcript;
+      if (typeof transcript === 'string' && transcript.trim()) {
+        setInput(transcript.trim());
+        setInternalError(null);
+      }
+      setIsVoiceActive(false);
+    };
+    recognition.onerror = () => {
+      setInternalError('Voice recognition failed. Please try again or type your prompt.');
+      setIsVoiceActive(false);
+    };
+    recognition.onend = () => setIsVoiceActive(false);
+    setIsVoiceActive(true);
+    try {
+      recognition.start();
+    } catch {
+      setIsVoiceActive(false);
+      setInternalError('Could not start voice recognition. Please try again.');
     }
   };
 
@@ -168,53 +213,92 @@ export const AIChatPage: React.FC<AIChatPageProps> = (props) => {
   };
 
   const handleSend = async (textOverride?: string) => {
-    const textToSend = (textOverride !== undefined ? textOverride : input).trim();
-    if (!textToSend || isStreaming) return;
+    const typedPrompt = (textOverride !== undefined ? textOverride : input).trim();
+    if ((!typedPrompt && !uploadedFileContent) || isStreaming || isLoading) return;
 
-    // Check if user is asking to create an app/project
-    const lower = textToSend.toLowerCase();
-    const isAppRequest = lower.includes('calculator') || lower.includes('create a') || lower.includes('build a') || lower.includes('python game') || lower.includes('generate');
+    const prompt = uploadedFileContent
+      ? `${typedPrompt || `Please inspect ${uploadedFileName || 'the attached file'}.`}\n\nAttached file: ${uploadedFileName || 'upload'}\n\n\`\`\`\n${uploadedFileContent}\n\`\`\``
+      : typedPrompt;
+    if (!prompt.trim()) return;
 
     if (props.sendMessage) {
-      await props.sendMessage(textToSend);
-    } else {
-      // Internal send message logic
       setInput('');
-      const userMsg: ChatMsg = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        text: textToSend,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setInternalMessages(prev => [...prev, userMsg]);
+      setUploadedFileName(null);
+      setUploadedFileContent('');
+      await props.sendMessage(prompt);
+      return;
     }
 
-    // If it's a project request or multi-language build request, synthesize real runnable project
-    const parsed = extractFilesFromAIResponse('', textToSend);
-    if (parsed && parsed.files.length > 0) {
-      const proj = createProject(
-        parsed.name,
-        `Generated via Rock AI assistant: ${textToSend}`,
-        parsed.template,
-        parsed.files
-      );
+    const userMsg: ChatMsg = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text: typedPrompt || `Please inspect attached file: ${uploadedFileName}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    const assistantId = `assistant-${Date.now()}`;
+    setInput('');
+    setUploadedFileName(null);
+    setUploadedFileContent('');
+    setInternalError(null);
+    setInternalLoading(true);
+    setInternalStreaming(true);
+    setInternalMessages(prev => [...prev, userMsg, {
+      id: assistantId,
+      role: 'assistant',
+      text: '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
 
-      const assistantMsg: ChatMsg = {
-        id: `assistant-proj-${Date.now()}`,
-        role: 'assistant',
-        text: `✨ I have designed, structured, and compiled **${parsed.name}** (${parsed.language}) with zero syntax errors!\n\nAll source files are generated and hot-loaded into memory. You can run the live preview in the emulator, download the source zip, edit the code, or click **Continue Development** to launch the full Workspace!`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        generatedProject: {
-          id: proj.id,
-          name: proj.name,
-          language: parsed.language,
-          files: proj.files,
+    let responseText = '';
+    try {
+      const history = messages
+        .filter(m => m.id !== 'welcome' && (m.role === 'user' || m.role === 'assistant'))
+        .slice(-12)
+        .map(m => ({ role: m.role, text: m.text }));
+      responseText = await generateResponse({
+        prompt,
+        history,
+        activeFileName: uploadedFileName || undefined,
+        activeFileContent: uploadedFileContent || undefined,
+        onChunk: chunk => {
+          responseText += chunk;
+          setInternalMessages(prev => prev.map(m => m.id === assistantId ? { ...m, text: responseText } : m));
         },
-      };
+      });
 
-      if (!props.sendMessage) {
-        setInternalMessages((prev) => [...prev, assistantMsg]);
+      const parsed = extractFilesFromAIResponse(responseText, prompt);
+      if (parsed && parsed.files.length > 0) {
+        const project = createProject(
+          parsed.name,
+          `Generated by Rock AI from the request: ${typedPrompt || uploadedFileName || 'attached file'}`,
+          parsed.template,
+          parsed.files
+        );
+        setInternalMessages(prev => prev.map(m => m.id === assistantId ? {
+          ...m,
+          text: `${responseText}\n\nProject files were extracted from the AI response. They have not been compiled or runtime-tested yet.`,
+          generatedProject: {
+            id: project.id,
+            name: project.name,
+            language: parsed.language,
+            files: project.files,
+          },
+        } : m));
       }
+      if (!responseText.trim()) {
+        throw new Error('The AI returned an empty response.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setInternalError(message);
+      setInternalMessages(prev => prev.map(m => m.id === assistantId ? {
+        ...m,
+        text: `I couldn't complete that request. ${message}`,
+      } : m));
+    } finally {
+      setInternalLoading(false);
+      setInternalStreaming(false);
+      internalAbortRef.current = null;
     }
   };
 

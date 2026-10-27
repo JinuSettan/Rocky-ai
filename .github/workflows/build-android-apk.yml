@@ -1,0 +1,68 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_dir:
+        description: "Path to a real Android Gradle project inside this repository"
+        required: true
+        default: "android-project"
+        type: string
+  push:
+    paths:
+      - "android-project/**"
+      - ".github/workflows/build-android-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Compile Android project and publish APK artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Check Android project
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir || 'android-project' }}
+        run: |
+          set -euo pipefail
+          case "$PROJECT_DIR" in
+            ""|/*|*..*) echo "::error::Invalid project directory"; exit 1 ;;
+          esac
+          if [ ! -f "$PROJECT_DIR/gradlew" ] || { [ ! -f "$PROJECT_DIR/settings.gradle" ] && [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; }; then
+            echo "::error::No Android Gradle project found at '$PROJECT_DIR'. Expected gradlew and settings.gradle(.kts). Export a complete native Android project there first."
+            exit 1
+          fi
+          chmod +x "$PROJECT_DIR/gradlew"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: ${{ inputs.project_dir || 'android-project' }}/**/*.gradle*
+
+      - name: Build debug APK
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir || 'android-project' }}
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rocky-ai-android-debug-apk
+          path: ${{ inputs.project_dir || 'android-project' }}/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

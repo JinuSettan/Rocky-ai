@@ -96,15 +96,25 @@ export async function generateResponse(options: GenerateResponseOptions): Promis
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, history, activeFileName, activeFileContent }),
       });
+      if (!fallbackRes.ok) {
+        throw new Error(`Fallback endpoint returned HTTP status ${fallbackRes.status}`);
+      }
+
       const data = await fallbackRes.json();
-      const text = data.text || '';
+      const text = typeof data.text === 'string' ? data.text : '';
+      if (!text.trim()) {
+        throw new Error('The AI endpoint returned an empty response.');
+      }
+
       if (onChunk) onChunk(text);
       return text;
     } catch (fallbackErr) {
       console.error('[Gemini Service] Failed to generate response:', fallbackErr);
-      const fallbackText = '✨ Response compiled successfully.';
-      if (onChunk) onChunk(fallbackText);
-      return fallbackText;
+      throw new Error(
+        fallbackErr instanceof Error
+          ? `Unable to generate an AI response: ${fallbackErr.message}`
+          : 'Unable to generate an AI response. Please try again.'
+      );
     }
   }
 }
